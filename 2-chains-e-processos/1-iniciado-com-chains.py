@@ -12,5 +12,5 @@ question_template = PromptTemplate(
 
 question_chain = question_template | model
 
-response = question_chain.invoke({"name": "John"})
+response = question_chain.invoke({"name": "Rafael"})
 print(response.content)
