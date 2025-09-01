@@ -19,5 +19,5 @@ llm_en = ChatGoogleGenerativeAI(model="gemini-2.5-pro", temperature=0)
 translate = template_translate | llm_en | StrOutputParser()
 pipeline = {"text": translate} | template_summarize | llm_en | StrOutputParser()
 
-response = pipeline.invoke({"initial_text": "Bolsonaro vai ser preso e vamos dar muita festa!"})
+response = pipeline.invoke({"initial_text": "Bolsonaro vai ser preso e vamos fazer muita festa!"})
 print(response)
