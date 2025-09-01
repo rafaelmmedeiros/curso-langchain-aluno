@@ -17,14 +17,11 @@ The industrial revolution in the 18th and 19th centuries transformed human socie
 Throughout this vast cosmic and biological history, Earth has been the only known planet to harbor life, making it a precious and unique world in our vast universe. Our understanding of this history continues to evolve as new discoveries are made in astronomy, geology, biology, and archaeology.
 """
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=250, chunk_overlap=70)
-chunks = text_splitter.split_text(long_text)
-print(len(chunks))
-print(chunks[0])
-print(chunks[1])
-print(chunks[2])
-print(chunks[3])
-print(chunks[4])
-print(chunks[5])
-print(chunks[6])
-print(chunks[7])
+splitter = RecursiveCharacterTextSplitter(chunk_size=250, chunk_overlap=50)
+chunks = splitter.create_documents([long_text])
+
+chain_stuff = load_summarize_chain(model, chain_type="stuff", verbose=False)
+
+summary_stuff = chain_stuff.invoke(chunks)
+
+print(summary_stuff)
