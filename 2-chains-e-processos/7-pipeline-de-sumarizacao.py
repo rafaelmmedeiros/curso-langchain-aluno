@@ -2,11 +2,46 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnableLambda
 from dotenv import load_dotenv
+import time
+import random
+
 load_dotenv()
 
-model = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0)
+class RateLimitedModel:
+    """Modelo com rate limiting para evitar exceder quotas"""
+    
+    def __init__(self, model_name="gemini-2.5-flash-lite", temperature=0):
+        self.model = ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+        self.last_call_time = 0
+        self.min_delay = 4.5  # Mínimo 4.5 segundos entre chamadas
+        
+    def invoke(self, prompt):
+        """Invoca o modelo com rate limiting"""
+        # Aguarda o tempo necessário para respeitar o rate limit
+        current_time = time.time()
+        time_since_last_call = current_time - self.last_call_time
+        
+        if time_since_last_call < self.min_delay:
+            sleep_time = self.min_delay - time_since_last_call + random.uniform(0, 1)
+            print(f"⏳ Aguardando {sleep_time:.1f}s para respeitar rate limit...")
+            time.sleep(sleep_time)
+        
+        try:
+            result = self.model.invoke(prompt)
+            self.last_call_time = time.time()
+            return result
+        except Exception as e:
+            if "quota" in str(e).lower() or "429" in str(e):
+                print(f"🚫 Quota excedida! Aguardando 60 segundos...")
+                time.sleep(60)
+                # Tenta novamente
+                return self.model.invoke(prompt)
+            else:
+                raise e
+
+# Usa o modelo com rate limiting
+model = RateLimitedModel()
 
 long_text = """
 The universe began approximately 13.8 billion years ago with the Big Bang, an unimaginably hot and dense state that rapidly expanded. In the first few moments, fundamental forces separated, and subatomic particles formed. Within minutes, hydrogen and helium nuclei were created through nuclear fusion. For hundreds of thousands of years, the universe remained too hot for atoms to form, existing as a plasma of charged particles.
@@ -22,17 +57,65 @@ Throughout this vast cosmic and biological history, Earth has been the only know
 splitter = RecursiveCharacterTextSplitter(chunk_size=250, chunk_overlap=50)
 chunks = splitter.create_documents([long_text])
 
+print(f"📝 Texto dividido em {len(chunks)} chunks para processamento")
+
+# Prompts para sumarização
 map_prompt = PromptTemplate.from_template("Write a concise summary of the following text:\n {context}")
-map_chain = map_prompt | model | StrOutputParser()
-
-prepare_map_inputs = RunnableLambda(lambda docs: [{"context": doc.page_content} for doc in docs])
-map_stage = prepare_map_inputs | map_chain.map()
-
 reduce_prompt = PromptTemplate.from_template("Combine the following summaries into a single concise summary:\n {context}")
-reduce_chain = reduce_prompt | model | StrOutputParser()
 
-prepare_reduce_inputs = RunnableLambda(lambda summaries: {"context": "\n".join(summaries)})
-pipeline = map_stage | prepare_reduce_inputs | reduce_chain
+print("🚀 Iniciando pipeline de sumarização...")
+print("⚠️  Este processo pode demorar devido aos delays de rate limiting")
+print("=" * 50)
 
-result = pipeline.invoke(chunks)
-print(result)
+# Processa cada chunk individualmente com rate limiting
+summaries = []
+for i, chunk in enumerate(chunks):
+    print(f"📦 Processando chunk {i+1}/{len(chunks)}")
+    
+    # Cria o prompt para este chunk
+    prompt = map_prompt.format(context=chunk.page_content)
+    
+    # Invoca o modelo com rate limiting
+    result = model.invoke(prompt)
+    
+    # Extrai o conteúdo da resposta
+    if hasattr(result, 'content'):
+        summary = result.content
+    else:
+        summary = str(result)
+    
+    summaries.append(summary)
+    print(f"✅ Chunk {i+1} processado: {len(summary)} caracteres")
+    
+    # Delay entre chunks (exceto o último)
+    if i < len(chunks) - 1:
+        print("⏸️  Aguardando antes do próximo chunk...")
+        time.sleep(2)  # Delay adicional entre chunks
+
+print("\n🔄 Combinando sumários...")
+
+# Combina todos os sumários em um único texto
+combined_summaries = "\n".join(summaries)
+
+# Cria o prompt para combinação final
+final_prompt = reduce_prompt.format(context=combined_summaries)
+
+# Invoca o modelo para combinação final
+print("🤖 Gerando sumário final...")
+final_result = model.invoke(final_prompt)
+
+# Extrai o resultado final
+if hasattr(final_result, 'content'):
+    final_summary = final_result.content
+else:
+    final_summary = str(final_result)
+
+print("\n" + "=" * 50)
+print("✅ RESULTADO FINAL:")
+print("=" * 50)
+print(final_summary)
+print("\n" + "=" * 50)
+print(f"📊 Estatísticas:")
+print(f"   Chunks processados: {len(chunks)}")
+print(f"   Sumários gerados: {len(summaries)}")
+print(f"   Caracteres no resultado final: {len(final_summary)}")
