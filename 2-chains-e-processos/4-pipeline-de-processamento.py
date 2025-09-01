@@ -6,12 +6,12 @@ load_dotenv()
 
 template_translate = PromptTemplate(
     input_variables=["initial_text"],
-    template="Translate the following text to English:\n ```{initial_text}```"
+    template="Translate the following text to English. Provide only ONE translation, no alternatives:\n ```{initial_text}```"
 )
 
 template_summarize = PromptTemplate(
     input_variables=["text"],
-    template="Summarize the following text in 4 words:\n ```{text}```"
+    template="Summarize the following text in exactly 4 words:\n ```{text}```"
 )
 
 llm_en = ChatGoogleGenerativeAI(model="gemini-2.5-pro", temperature=0)
