@@ -1,46 +1,9 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from dotenv import load_dotenv
+from utils_gemini import RateLimitedModel
 import time
-import random
 
-load_dotenv()
-
-class RateLimitedModel:
-    """Modelo com rate limiting para evitar exceder quotas"""
-    
-    def __init__(self, model_name="gemini-2.5-flash-lite", temperature=0):
-        self.model = ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
-        self.last_call_time = 0
-        self.min_delay = 4.5  # Mínimo 4.5 segundos entre chamadas
-        
-    def invoke(self, prompt):
-        """Invoca o modelo com rate limiting"""
-        # Aguarda o tempo necessário para respeitar o rate limit
-        current_time = time.time()
-        time_since_last_call = current_time - self.last_call_time
-        
-        if time_since_last_call < self.min_delay:
-            sleep_time = self.min_delay - time_since_last_call + random.uniform(0, 1)
-            print(f"⏳ Aguardando {sleep_time:.1f}s para respeitar rate limit...")
-            time.sleep(sleep_time)
-        
-        try:
-            result = self.model.invoke(prompt)
-            self.last_call_time = time.time()
-            return result
-        except Exception as e:
-            if "quota" in str(e).lower() or "429" in str(e):
-                print(f"🚫 Quota excedida! Aguardando 60 segundos...")
-                time.sleep(60)
-                # Tenta novamente
-                return self.model.invoke(prompt)
-            else:
-                raise e
-
-# Usa o modelo com rate limiting
+# Usa o modelo com rate limiting (importado do módulo)
 model = RateLimitedModel()
 
 long_text = """
@@ -75,7 +38,7 @@ for i, chunk in enumerate(chunks):
     # Cria o prompt para este chunk
     prompt = map_prompt.format(context=chunk.page_content)
     
-    # Invoca o modelo com rate limiting
+    # Invoca o modelo com rate limiting (automático!)
     result = model.invoke(prompt)
     
     # Extrai o conteúdo da resposta
@@ -119,3 +82,7 @@ print(f"📊 Estatísticas:")
 print(f"   Chunks processados: {len(chunks)}")
 print(f"   Sumários gerados: {len(summaries)}")
 print(f"   Caracteres no resultado final: {len(final_summary)}")
+
+# Mostra estatísticas do modelo
+stats = model.get_stats()
+print(f"   Total de requisições ao Gemini: {stats['total_requests']}")
